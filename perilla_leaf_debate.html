@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Perilla Leaf Debate — A Reflection</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Sans:wght@300;400;500&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
+
+  <!-- Firebase -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, runTransaction, onValue, push, serverTimestamp, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDos8yDiCdxoIU2QFholO2Is0RGl70TwF8",
+      authDomain: "nst-perilla.firebaseapp.com",
+      projectId: "nst-perilla",
+      databaseURL: "https://nst-perilla-default-rtdb.firebaseio.com",
+      storageBucket: "nst-perilla.firebasestorage.app",
+      messagingSenderId: "518648580911",
+      appId: "1:518648580911:web:5670cfc9a013bf1b69efda"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const pollRef = ref(db, 'poll/votes');
+    const LABELS = ['fine', 'weird', 'uncomfortable', 'no'];
+
+    const insights = [
+      "Likely secure attachment — you read ambiguous gestures charitably and trust your partner's intentions. Research suggests this correlates with higher relationship satisfaction.",
+      "You may sit between secure and anxious attachment — the discomfort is real, but your impulse to let it go reflects self-regulation. Communication styles matter a lot here.",
+      "This response suggests some attachment anxiety — the urge to process the event together is healthy, but worth examining what underlying threat you're responding to.",
+      "Strong boundary awareness. This likely reflects either anxious attachment or a past relational experience that's recalibrated your thresholds. Neither is wrong — it's data about you."
+    ];
+
+    // Live updates
+    onValue(pollRef, (snapshot) => {
+      const data = snapshot.val() || {};
+      const counts = LABELS.map(k => data[k] || 0);
+      const total = counts.reduce((a, b) => a + b, 0);
+
+      LABELS.forEach((_, i) => {
+        const pct = total > 0 ? Math.round(counts[i] / total * 100) : 0;
+        const pctEl = document.getElementById(`pct${i}`);
+        const barEl = document.getElementById(`barFill${i}`);
+        const countEl = document.getElementById(`count${i}`);
+        if (pctEl) pctEl.textContent = pct + '%';
+        if (barEl) barEl.style.width = pct + '%';
+        if (countEl) countEl.textContent = counts[i] + (counts[i] === 1 ? ' vote' : ' votes');
+      });
+
+      const totalEl = document.getElementById('totalVotes');
+      if (totalEl) totalEl.textContent = total + (total === 1 ? ' person has' : ' people have') + ' weighed in';
+    });
+
+    // Exposed globally for onclick handlers
+    window.castVote = function(idx) {
+      if (window._hasVoted) return;
+      window._hasVoted = true;
+
+      runTransaction(ref(db, `poll/votes/${LABELS[idx]}`), (v) => (v || 0) + 1);
+
+      document.querySelectorAll('.poll-btn').forEach((btn, i) => {
+        btn.disabled = true;
+        if (i === idx) btn.classList.add('selected');
+        document.getElementById(`bar${i}`).style.display = 'block';
+      });
+
+    };
+    // Comments
+    const commentsRef = ref(db, 'comments');
+
+    const textarea = document.getElementById('commentInput');
+    if (textarea) {
+      textarea.addEventListener('input', () => {
+        document.getElementById('charCount').textContent = textarea.value.length + ' / 500';
+      });
+    }
+
+    window.submitComment = function() {
+      const text = (document.getElementById('commentInput').value || '').trim();
+      if (!text) return;
+      const btn = document.getElementById('commentSubmit');
+      btn.disabled = true;
+      push(commentsRef, { text, ts: serverTimestamp() }).then(() => {
+        document.getElementById('commentInput').value = '';
+        document.getElementById('charCount').textContent = '0 / 500';
+        const msg = document.getElementById('commentMsg');
+        msg.textContent = 'Posted! Thanks for sharing.';
+        msg.style.display = 'block';
+        setTimeout(() => { msg.style.display = 'none'; }, 3000);
+      });
+    };
+
+    onValue(query(commentsRef, orderByChild('ts'), limitToLast(50)), (snapshot) => {
+      const feed = document.getElementById('commentsFeed');
+      if (!feed) return;
+      const items = [];
+      snapshot.forEach(child => items.push(child.val()));
+      items.reverse();
+      if (items.length === 0) {
+        feed.innerHTML = '<p class="comments-empty">No comments yet — be the first to share.</p>';
+        return;
+      }
+      feed.innerHTML = items.map(c => {
+        const ago = c.ts ? timeAgo(c.ts) : 'just now';
+        return `<div class="comment-card">
+          <p class="comment-text">${escapeHtml(c.text)}</p>
+          <p class="comment-meta">Anonymous · ${ago}</p>
+        </div>`;
+      }).join('');
+    });
+
+    function escapeHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function timeAgo(ts) {
+      const diff = Math.floor((Date.now() - ts) / 1000);
+      if (diff < 60) return 'just now';
+      if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+      if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+      return Math.floor(diff/86400) + 'd ago';
+    }
+  </script>
+
+  <style>
+    :root {
+      --bg: #0d0d0d;
+      --bg2: #141414;
+      --bg3: #1a1a1a;
+      --green: #4a7c59;
+      --green-light: #6fab7d;
+      --green-pale: #b8d4bf;
+      --cream: #f0e9dc;
+      --cream-dim: #c9bfaf;
+      --red-light: #e74c3c;
+      --text: #e8e2d9;
+      --text-dim: #9a9187;
+      --accent: #d4a853;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 300;
+      overflow-x: hidden;
+    }
+
+    /* ── PERILLA TOP ── */
+    .perilla-top {
+      display: flex;
+      justify-content: center;
+      padding: 3.5rem 1rem 0;
+      position: relative;
+      z-index: 2;
+    }
+    .perilla-svg {
+      width: clamp(140px, 22vw, 220px);
+      filter: drop-shadow(0 0 30px rgba(74,124,89,0.6)) drop-shadow(0 0 70px rgba(74,124,89,0.3));
+      animation: leafSway 6s ease-in-out infinite;
+      transform-origin: bottom center;
+    }
+    @keyframes leafSway {
+      0%, 100% { transform: rotate(-4deg) scale(1); }
+      50%       { transform: rotate(4deg) scale(1.03); }
+    }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 88vh;
+      display: grid;
+      place-items: center;
+      position: relative;
+      overflow: hidden;
+      padding: 2rem 2rem 4rem;
+    }
+    .hero-bg {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 60% 40% at 70% 30%, rgba(74,124,89,0.18) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 60% at 20% 80%, rgba(192,57,43,0.10) 0%, transparent 60%),
+        var(--bg);
+    }
+    .leaf-deco {
+      position: absolute; font-size: 12rem; opacity: 0.04;
+      user-select: none; animation: float 8s ease-in-out infinite;
+    }
+    .leaf-deco:nth-child(1) { top: 5%; left: -2%; animation-delay: 0s; }
+    .leaf-deco:nth-child(2) { top: 60%; right: -3%; font-size: 9rem; animation-delay: 3s; }
+    .leaf-deco:nth-child(3) { top: 30%; right: 15%; font-size: 6rem; animation-delay: 1.5s; }
+    @keyframes float {
+      0%, 100% { transform: translateY(0) rotate(-5deg); }
+      50%       { transform: translateY(-20px) rotate(5deg); }
+    }
+
+    .hero-content { position: relative; text-align: center; max-width: 800px; }
+
+    .hero-tag {
+      display: inline-block;
+      border: 1px solid var(--green); color: var(--green-light);
+      font-size: 0.72rem; letter-spacing: 0.2em; text-transform: uppercase;
+      padding: 0.4em 1.2em; border-radius: 100px; margin-bottom: 2rem;
+      animation: fadeUp 0.8s ease both;
+    }
+    .hero-title {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2.8rem, 8vw, 6rem); font-weight: 900;
+      line-height: 1.05; margin-bottom: 1.5rem;
+      animation: fadeUp 0.8s 0.15s ease both;
+    }
+    .hero-title em { font-style: italic; color: var(--green-light); }
+    .hero-subtitle {
+      font-size: 1.1rem; color: var(--text-dim);
+      max-width: 520px; margin: 0 auto 3rem; line-height: 1.7;
+      animation: fadeUp 0.8s 0.3s ease both;
+    }
+    .hero-cta {
+      display: inline-flex; align-items: center; gap: 0.6rem;
+      background: var(--green); color: var(--cream);
+      padding: 0.85em 2em; border-radius: 100px; text-decoration: none;
+      font-size: 0.9rem; font-weight: 500; letter-spacing: 0.03em;
+      transition: background 0.2s, transform 0.2s;
+      animation: fadeUp 0.8s 0.45s ease both;
+    }
+    .hero-cta:hover { background: var(--green-light); transform: translateY(-2px); }
+
+    .scroll-hint {
+      position: absolute; bottom: 2.5rem; left: 50%; transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: 0.4rem;
+      color: var(--text-dim); font-size: 0.75rem; letter-spacing: 0.1em;
+      text-transform: uppercase; animation: fadeUp 1s 1s ease both;
+    }
+    .scroll-dot {
+      width: 1px; height: 48px;
+      background: linear-gradient(to bottom, var(--green-light), transparent);
+      animation: scrollDown 1.6s ease-in-out infinite;
+    }
+    @keyframes scrollDown {
+      0%   { transform: scaleY(0); transform-origin: top; }
+      50%  { transform: scaleY(1); transform-origin: top; }
+      51%  { transform: scaleY(1); transform-origin: bottom; }
+      100% { transform: scaleY(0); transform-origin: bottom; }
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── SECTIONS ── */
+    section { max-width: 860px; margin: 0 auto; padding: 5rem 2rem; }
+    .section-label {
+      font-size: 0.7rem; letter-spacing: 0.25em; text-transform: uppercase;
+      color: var(--green-light); margin-bottom: 1rem;
+    }
+    h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2rem, 5vw, 3rem); font-weight: 700;
+      line-height: 1.15; margin-bottom: 1.5rem;
+    }
+    h2 em { font-style: italic; color: var(--green-light); }
+    p { font-size: 1.05rem; line-height: 1.85; color: var(--cream-dim); margin-bottom: 1.2rem; }
+
+    /* ── SCENARIO CARD ── */
+    .scenario-card {
+      background: var(--bg3); border: 1px solid #2a2a2a;
+      border-left: 3px solid var(--green); border-radius: 12px;
+      padding: 2.5rem; margin: 3rem 0; position: relative;
+    }
+    .scenario-card::before {
+      content: "🥩"; position: absolute;
+      top: -1.2rem; right: 1.5rem; font-size: 2rem;
+    }
+    .scenario-card p {
+      font-family: 'DM Serif Display', serif; font-size: 1.25rem;
+      font-style: italic; color: var(--cream); line-height: 1.7;
+    }
+    .scenario-card .source {
+      font-family: 'DM Sans', sans-serif; font-size: 0.8rem;
+      font-style: normal; color: var(--text-dim);
+      margin-top: 1rem; margin-bottom: 0;
+    }
+
+    .divider {
+      border: none; height: 1px;
+      background: linear-gradient(to right, transparent, #2a2a2a, transparent);
+    }
+
+    /* ── RESEARCH CARDS ── */
+    .research-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.5rem; margin-top: 2.5rem; align-items: stretch;
+    }
+    .research-grid > a { display: flex; }
+    .research-card {
+      background: var(--bg2); border: 1px solid #222; border-radius: 12px;
+      padding: 1.8rem; transition: border-color 0.2s, transform 0.2s; height: 100%;
+    }
+    .research-card:hover { border-color: var(--green); transform: translateY(-4px); }
+    .research-card .icon { font-size: 1.8rem; margin-bottom: 1rem; }
+    .research-card h3 {
+      font-family: 'Playfair Display', serif; font-size: 1.1rem;
+      margin-bottom: 0.6rem; color: var(--cream);
+    }
+    .research-card p { font-size: 0.92rem; line-height: 1.65; color: var(--text-dim); margin: 0; }
+    .research-card .cite {
+      display: block; font-size: 0.72rem; color: var(--green-light);
+      margin-top: 0.8rem; letter-spacing: 0.03em;
+    }
+
+    /* ── SPECTRUM ── */
+    .spectrum { margin: 3rem 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+    .spectrum-item { border-radius: 12px; padding: 1.5rem; text-align: center; }
+    .spectrum-item:nth-child(1) { background: rgba(192,57,43,0.12); border: 1px solid rgba(192,57,43,0.25); }
+    .spectrum-item:nth-child(2) { background: rgba(212,168,83,0.10); border: 1px solid rgba(212,168,83,0.2); }
+    .spectrum-item:nth-child(3) { background: rgba(74,124,89,0.12); border: 1px solid rgba(74,124,89,0.25); }
+    .spectrum-item .emoji { font-size: 2rem; margin-bottom: 0.6rem; }
+    .spectrum-item h4 { font-family: 'Playfair Display', serif; font-size: 1rem; margin-bottom: 0.4rem; }
+    .spectrum-item:nth-child(1) h4 { color: var(--red-light); }
+    .spectrum-item:nth-child(2) h4 { color: var(--accent); }
+    .spectrum-item:nth-child(3) h4 { color: var(--green-light); }
+    .spectrum-item p { font-size: 0.85rem; line-height: 1.55; color: var(--text-dim); margin: 0; }
+
+    /* ── PULL QUOTE ── */
+    .pull-quote {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.3rem, 3.5vw, 1.9rem); font-style: italic;
+      color: var(--cream); border-left: 3px solid var(--green);
+      padding-left: 1.5rem; margin: 2.5rem 0; line-height: 1.5;
+    }
+
+    /* ── POLL ── */
+    .poll-section {
+      background: var(--bg3); border-radius: 16px;
+      border: 1px solid #222; padding: 2.5rem; margin-top: 3rem;
+    }
+    .poll-section h3 {
+      font-family: 'Playfair Display', serif; font-size: 1.4rem;
+      margin-bottom: 0.5rem; color: var(--cream);
+    }
+    .poll-section .sub { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 0.5rem; }
+
+    .total-votes {
+      font-size: 0.78rem; color: var(--green-light); letter-spacing: 0.05em;
+      margin-bottom: 1.8rem; display: flex; align-items: center; gap: 0.5rem;
+    }
+    .live-dot {
+      width: 6px; height: 6px; background: var(--green-light);
+      border-radius: 50%; flex-shrink: 0;
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.4; transform: scale(0.7); }
+    }
+
+    .poll-options { display: flex; flex-direction: column; gap: 0.75rem; }
+
+    .poll-btn {
+      background: transparent; border: 1px solid #333; border-radius: 12px;
+      padding: 0.9em 1.4em; color: var(--text);
+      font-family: 'DM Sans', sans-serif; font-size: 0.95rem;
+      cursor: pointer; text-align: left; width: 100%;
+      display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .poll-btn:hover:not(:disabled) { border-color: var(--green); background: rgba(74,124,89,0.07); }
+    .poll-btn.selected { border-color: var(--green-light); background: rgba(74,124,89,0.12); }
+    .poll-btn:disabled { cursor: default; }
+
+    .poll-btn-right {
+      display: flex; flex-direction: column; align-items: flex-end;
+      gap: 0.15rem; min-width: 60px; flex-shrink: 0;
+    }
+    .poll-pct { font-size: 1rem; font-weight: 500; color: var(--green-light); }
+    .poll-count { font-size: 0.7rem; color: var(--text-dim); }
+
+    .poll-bar-wrap {
+      display: none; height: 3px; background: #222;
+      border-radius: 100px; overflow: hidden; margin-top: 0.3rem;
+    }
+    .poll-bar {
+      height: 100%; width: 0%;
+      background: linear-gradient(to right, var(--green), var(--green-light));
+      border-radius: 100px; transition: width 0.8s ease;
+    }
+
+    .poll-result { display: none; margin-top: 1.5rem; }
+    #pollInsight { font-size: 0.95rem; color: var(--green-pale); margin: 0; line-height: 1.7; }
+
+    /* ── REFERENCES ── */
+    /* ── COMMENTS ── */
+    .comment-box {
+      background: var(--bg3); border: 1px solid #2a2a2a; border-radius: 12px;
+      padding: 1.5rem; margin: 2rem 0 1.5rem;
+    }
+    .comment-box textarea {
+      width: 100%; background: transparent; border: none; outline: none;
+      color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 0.95rem;
+      font-weight: 300; line-height: 1.7; resize: none; min-height: 90px;
+    }
+    .comment-box textarea::placeholder { color: var(--text-dim); }
+    .comment-footer {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-top: 0.8rem; border-top: 1px solid #2a2a2a; padding-top: 0.8rem;
+    }
+    #charCount { font-size: 0.75rem; color: var(--text-dim); }
+    #commentSubmit {
+      background: var(--green); color: var(--cream); border: none;
+      border-radius: 100px; padding: 0.5em 1.4em;
+      font-family: 'DM Sans', sans-serif; font-size: 0.85rem; font-weight: 500;
+      cursor: pointer; transition: background 0.2s;
+    }
+    #commentSubmit:hover { background: var(--green-light); }
+    #commentSubmit:disabled { opacity: 0.5; cursor: default; }
+
+    .comments-feed { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
+    .comment-card {
+      background: var(--bg2); border: 1px solid #222; border-radius: 10px;
+      padding: 1.1rem 1.3rem;
+    }
+    .comment-card .comment-text { font-size: 0.95rem; color: var(--cream-dim); line-height: 1.7; }
+    .comment-card .comment-meta { font-size: 0.72rem; color: var(--text-dim); margin-top: 0.5rem; }
+    .comments-empty { font-size: 0.88rem; color: var(--text-dim); font-style: italic; }
+
+    footer {
+      text-align: center; padding: 3rem 2rem;
+      color: var(--text-dim); font-size: 0.82rem; letter-spacing: 0.05em;
+    }
+
+    .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.7s ease, transform 0.7s ease; }
+    .reveal.visible { opacity: 1; transform: none; }
+
+    @media (max-width: 600px) {
+      .spectrum { grid-template-columns: 1fr; }
+      .research-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── PERILLA LEAF IMAGE ── -->
+<div class="perilla-top">
+  <svg class="perilla-svg" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" aria-label="A perilla leaf">
+    <!-- stem -->
+    <path d="M100 230 Q98 200 100 175" stroke="#4a7c59" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <!-- main leaf body - heart-shaped with serrated edge -->
+    <path d="
+      M100 175
+      Q102 165 112 158 Q124 150 132 140 Q142 128 144 114
+      Q146 100 140 88  Q134 76  124 70
+      Q118 66  114 62  Q108 56  106 48
+      Q104 40  100 36
+      Q96  40  94  48  Q92  56  86  62
+      Q82  66  76  70  Q66  76  60  88
+      Q54  100 56  114 Q58  128 68  140
+      Q76  150 88  158 Q98  165 100 175Z
+    " fill="url(#leafGrad)" stroke="#3a6647" stroke-width="1.2"/>
+    <!-- veins -->
+    <path d="M100 175 Q100 130 100 80" stroke="#3a6647" stroke-width="1.2" fill="none" opacity="0.6"/>
+    <path d="M100 155 Q115 145 128 130" stroke="#3a6647" stroke-width="0.9" fill="none" opacity="0.5"/>
+    <path d="M100 155 Q85  145 72  130" stroke="#3a6647" stroke-width="0.9" fill="none" opacity="0.5"/>
+    <path d="M100 135 Q118 122 134 108" stroke="#3a6647" stroke-width="0.8" fill="none" opacity="0.4"/>
+    <path d="M100 135 Q82  122 66  108" stroke="#3a6647" stroke-width="0.8" fill="none" opacity="0.4"/>
+    <path d="M100 115 Q116 102 130 90"  stroke="#3a6647" stroke-width="0.7" fill="none" opacity="0.35"/>
+    <path d="M100 115 Q84  102 70  90"  stroke="#3a6647" stroke-width="0.7" fill="none" opacity="0.35"/>
+    <defs>
+      <radialGradient id="leafGrad" cx="45%" cy="40%" r="65%">
+        <stop offset="0%"   stop-color="#7ec89a"/>
+        <stop offset="50%"  stop-color="#4a7c59"/>
+        <stop offset="100%" stop-color="#2d5a3d"/>
+      </radialGradient>
+    </defs>
+  </svg>
+</div>
+
+<!-- ── HERO ── -->
+<div class="hero">
+  <div class="hero-bg"></div>
+  <span class="leaf-deco">🌿</span>
+  <span class="leaf-deco">🌿</span>
+  <span class="leaf-deco">🌿</span>
+  <div class="hero-content">
+    <div class="hero-tag">꺳잎논쟁</div>
+    <h1 class="hero-title">
+      Would you let your partner be <br><em>helped by a cross-gender friend?</em>
+    </h1>
+    
+    <a href="#intro" class="hero-cta">Read the Reflection ↓</a>
+  </div>
+  <div class="scroll-hint">
+    <span>Scroll</span>
+    <div class="scroll-dot"></div>
+  </div>
+</div>
+
+<!-- ── INTRO ── -->
+<section id="intro">
+  <div class="reveal">
+    <div class="section-label">The Setup</div>
+    <h2>A meal? <br><em>Or a relationship test?</em></h2>
+    <p>
+      Picture this: You're at a Korean BBQ restaurant with a group of friends including your partner. Your partner is struggling to peel apart two perilla leaves that are stuck together — and an opposite-gender friend reaches over to help separate them. 
+    </p>
+    <p>
+      And yet, when this question went <a href="https://www.yahoo.com/lifestyle/hypothetical-dating-scenario-called-perilla-034713547.html" target="_blank" rel="noopener" style="color:var(--green-light);text-decoration:underline;text-underline-offset:3px;">viral on Korean social media</a> and spread across TikTok, Instagram, and Reddit, it sparked an enormous debate. Some called it a simple act of courtesy. Others said it was a dealbreaker. Many couldn't even agree on what the disagreement was <em>really</em> about.
+    </p>
+
+    <div class="scenario-card">
+      <p>"Your partner's opposite-gender friend helps them peel apart two stuck perilla leaves with their chopsticks at KBBQ. Is that okay with you?"</p>
+      <p class="source">— The question that launched a thousand arguments online</p>
+    </div>
+
+    <p>
+      On the surface, it seems trivial. But I think the perilla leaf debate is actually a very interesting window into something much more fundamental in our relationship beliefs, such as - how our attachment styles and cultural conditioning shape what we experience as a threat to our relationships and what we don't.
+    </p>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ── RESEARCH ── -->
+<section>
+  <div class="reveal">
+    <div class="section-label">The Research</div>
+    <h2>What empirical evidence says about<br><em>jealousy & boundaries</em></h2>
+    <p>
+      The fuelled debate around this scenario is not random. Research in psychology gives us some reasoning to understand why some people find this completely innocuous and why others feel threatened or jealous!
+    </p>
+  </div>
+
+  <div class="research-grid">
+    <a href="http://pmc.ncbi.nlm.nih.gov/articles/PMC10659228/" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;">
+    <div class="research-card reveal" style="cursor:pointer;">
+      <div class="icon">🔗</div>
+      <h3>Attachment Styles Shape Jealousy</h3>
+      <p>People with anxious attachment experience more cognitive and emotional jealousy, while avoidantly attached individuals tend to withdraw and suppress. Securely attached people feel anger but can process it constructively.</p>
+      <span class="cite">Chursina, 2023</span>
+    </div>
+    </a>
+    <a href="https://newsroom.ucla.edu/releases/new-study-led-by-ucla-anthropologist-suggests-that-in-societies-where-dads-are-more-involved-with-their-kids-responses-to-infidelity-are-more-severe" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;">
+    <div class="research-card reveal" style="cursor:pointer;">
+      <div class="icon">🌍</div>
+      <h3>Culture Shapes How Jealousy Is Perceived</h3>
+      <p>Across 11 societies, responses to perceived infidelity varied dramatically based on social norms — not just personality. In cultures where fathers are more involved in child-rearing, responses to relational threats tend to be significantly more intense.</p>
+      <span class="cite">Scelza et al., 2021 — UCLA</span>
+    </div>
+    </a>
+  </div>
+
+</section>
+
+<hr class="divider" />
+
+<!-- ── POLL ── -->
+<section>
+  <div class="reveal">
+    <div class="section-label">Your Turn</div>
+    <h2>Now I want to know<br><em>what you think!</em></h2>
+    <p>
+      The perilla leaf debate has no objectively correct answer — but your gut reaction says something real about you. So: what does it say?
+    </p>
+
+    <div class="poll-section">
+      <h3>The Scenario</h3>
+      <p class="sub">Your partner's opposite-gender friend helps them peel apart two stuck perilla leaves at KBBQ. How do you feel? <em style="color:var(--text-dim);">If that doesn't land in your culture, picture this instead: an opposite-gender friend offers to drive your partner home after a late night out because you're not around.</em></p>
+      <div class="total-votes">
+        <div class="live-dot"></div>
+        <span id="totalVotes">Connecting…</span>
+      </div>
+
+      <div class="poll-options">
+        <div>
+          <button class="poll-btn" onclick="castVote(0)">
+            <span>🌿 Totally fine, it's just being helpful</span>
+            <div class="poll-btn-right">
+              <span class="poll-pct" id="pct0">—</span>
+              <span class="poll-count" id="count0"></span>
+            </div>
+          </button>
+          <div class="poll-bar-wrap" id="bar0"><div class="poll-bar" id="barFill0"></div></div>
+        </div>
+        <div>
+          <button class="poll-btn" onclick="castVote(1)">
+            <span>🤔 A little weird but I wouldn't say anything</span>
+            <div class="poll-btn-right">
+              <span class="poll-pct" id="pct1">—</span>
+              <span class="poll-count" id="count1"></span>
+            </div>
+          </button>
+          <div class="poll-bar-wrap" id="bar1"><div class="poll-bar" id="barFill1"></div></div>
+        </div>
+        <div>
+          <button class="poll-btn" onclick="castVote(2)">
+            <span>😬 I'd feel uncomfortable and we'd need to talk</span>
+            <div class="poll-btn-right">
+              <span class="poll-pct" id="pct2">—</span>
+              <span class="poll-count" id="count2"></span>
+            </div>
+          </button>
+          <div class="poll-bar-wrap" id="bar2"><div class="poll-bar" id="barFill2"></div></div>
+        </div>
+        <div>
+          <button class="poll-btn" onclick="castVote(3)">
+            <span>🚩 Hard no. That's a red flag / violation! </span>
+            <div class="poll-btn-right">
+              <span class="poll-pct" id="pct3">—</span>
+              <span class="poll-count" id="count3"></span>
+            </div>
+          </button>
+          <div class="poll-bar-wrap" id="bar3"><div class="poll-bar" id="barFill3"></div></div>
+        </div>
+      </div>
+
+      <div class="poll-result" id="pollResult">
+        <p id="pollInsight"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ── COMMENTS ── -->
+<section>
+  <div class="reveal">
+    <div class="section-label">The Conversation</div>
+    <h2>What does this <br><em>leaf</em> us with?</h2>
+    <p>Share a thought! Whether it be a similar past experience, how this plays out in your culture, or just your honest reaction. All posts are anonymous.</p>
+
+    <div class="comment-box">
+      <textarea id="commentInput" placeholder="e.g. In my culture this would look something like.../ I once got jealous over something similar and…" maxlength="500"></textarea>
+      <div class="comment-footer">
+        <span id="charCount">0 / 500</span>
+        <button id="commentSubmit" onclick="submitComment()">Post anonymously →</button>
+      </div>
+      <p id="commentMsg" style="display:none; font-size:0.82rem; color:var(--green-light); margin-top:0.6rem;"></p>
+    </div>
+
+    <div id="commentsFeed" class="comments-feed"></div>
+  </div>
+</section>
+
+
+<script>
+  const reveals = document.querySelectorAll('.reveal');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+  }, { threshold: 0.1 });
+  reveals.forEach(r => observer.observe(r));
+</script>
+</body>
+</html>
