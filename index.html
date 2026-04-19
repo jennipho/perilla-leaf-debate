@@ -78,18 +78,37 @@
     }
 
     window.submitComment = function() {
-      const text = (document.getElementById('commentInput').value || '').trim();
+      const input = document.getElementById('commentInput');
+      const text = (input.value || '').trim();
       if (!text) return;
       const btn = document.getElementById('commentSubmit');
       btn.disabled = true;
+
+      // Optimistic local insert so poster sees it immediately
+      const feed = document.getElementById('commentsFeed');
+      const tempCard = document.createElement('div');
+      tempCard.className = 'comment-card';
+      tempCard.innerHTML = `<p class="comment-text">${escapeHtml(text)}</p><p class="comment-meta">Anonymous · just now</p>`;
+      if (feed.firstChild && feed.firstChild.classList && feed.firstChild.classList.contains('comments-empty')) {
+        feed.innerHTML = '';
+      }
+      feed.insertBefore(tempCard, feed.firstChild);
+
       push(commentsRef, { text, ts: serverTimestamp() }).then(() => {
-        document.getElementById('commentInput').value = '';
+        input.value = '';
         document.getElementById('charCount').textContent = '0 / 500';
         btn.disabled = false;
         const msg = document.getElementById('commentMsg');
         msg.textContent = 'Posted! Thanks for sharing.';
         msg.style.display = 'block';
         setTimeout(() => { msg.style.display = 'none'; }, 3000);
+      }).catch(() => {
+        tempCard.remove();
+        btn.disabled = false;
+        const msg = document.getElementById('commentMsg');
+        msg.textContent = 'Something went wrong — please try again.';
+        msg.style.color = 'var(--red-light)';
+        msg.style.display = 'block';
       });
     };
 
