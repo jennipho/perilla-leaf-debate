@@ -9,7 +9,7 @@
   <!-- Firebase -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getDatabase, ref, runTransaction, onValue, push, serverTimestamp, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+    import { getDatabase, ref, runTransaction, onValue, onChildAdded, push, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDos8yDiCdxoIU2QFholO2Is0RGl70TwF8",
@@ -83,17 +83,6 @@
       if (!text) return;
       const btn = document.getElementById('commentSubmit');
       btn.disabled = true;
-
-      // Optimistic local insert so poster sees it immediately
-      const feed = document.getElementById('commentsFeed');
-      const tempCard = document.createElement('div');
-      tempCard.className = 'comment-card';
-      tempCard.innerHTML = `<p class="comment-text">${escapeHtml(text)}</p><p class="comment-meta">Anonymous · just now</p>`;
-      if (feed.firstChild && feed.firstChild.classList && feed.firstChild.classList.contains('comments-empty')) {
-        feed.innerHTML = '';
-      }
-      feed.insertBefore(tempCard, feed.firstChild);
-
       push(commentsRef, { text, ts: serverTimestamp() }).then(() => {
         input.value = '';
         document.getElementById('charCount').textContent = '0 / 500';
@@ -103,7 +92,6 @@
         msg.style.display = 'block';
         setTimeout(() => { msg.style.display = 'none'; }, 3000);
       }).catch(() => {
-        tempCard.remove();
         btn.disabled = false;
         const msg = document.getElementById('commentMsg');
         msg.textContent = 'Something went wrong — please try again.';
@@ -112,25 +100,28 @@
       });
     };
 
-    onValue(commentsRef, (snapshot) => {
-      const feed = document.getElementById('commentsFeed');
+    // onChildAdded fires once per existing comment on load, then once per new comment
+    const feed = document.getElementById('commentsFeed');
+    let hasComments = false;
+    onChildAdded(commentsRef, (snapshot) => {
       if (!feed) return;
-      const items = [];
-      snapshot.forEach(child => items.push(child.val()));
-      items.sort((a, b) => (b.ts || 0) - (a.ts || 0));
-      items.splice(50);
-      if (items.length === 0) {
-        feed.innerHTML = '<p class="comments-empty">No comments yet — be the first to share.</p>';
-        return;
-      }
-      feed.innerHTML = items.map(c => {
-        const ago = c.ts ? timeAgo(c.ts) : 'just now';
-        return `<div class="comment-card">
-          <p class="comment-text">${escapeHtml(c.text)}</p>
-          <p class="comment-meta">Anonymous · ${ago}</p>
-        </div>`;
-      }).join('');
+      hasComments = true;
+      const c = snapshot.val();
+      const card = document.createElement('div');
+      card.className = 'comment-card';
+      const ago = c.ts ? timeAgo(c.ts) : 'just now';
+      card.innerHTML = `<p class="comment-text">${escapeHtml(c.text)}</p><p class="comment-meta">Anonymous · ${ago}</p>`;
+      // Remove placeholder if present
+      const empty = feed.querySelector('.comments-empty');
+      if (empty) empty.remove();
+      feed.insertBefore(card, feed.firstChild);
     });
+    // Show placeholder only if no comments after brief wait
+    setTimeout(() => {
+      if (!hasComments && feed && feed.children.length === 0) {
+        feed.innerHTML = '<p class="comments-empty">No comments yet — be the first to share.</p>';
+      }
+    }, 2000);
 
     function escapeHtml(s) {
       return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
