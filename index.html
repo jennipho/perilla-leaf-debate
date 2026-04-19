@@ -85,6 +85,7 @@
       push(commentsRef, { text, ts: serverTimestamp() }).then(() => {
         document.getElementById('commentInput').value = '';
         document.getElementById('charCount').textContent = '0 / 500';
+        btn.disabled = false;
         const msg = document.getElementById('commentMsg');
         msg.textContent = 'Posted! Thanks for sharing.';
         msg.style.display = 'block';
@@ -92,12 +93,13 @@
       });
     };
 
-    onValue(query(commentsRef, orderByChild('ts'), limitToLast(50)), (snapshot) => {
+    onValue(commentsRef, (snapshot) => {
       const feed = document.getElementById('commentsFeed');
       if (!feed) return;
       const items = [];
       snapshot.forEach(child => items.push(child.val()));
-      items.reverse();
+      items.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+      items.splice(50);
       if (items.length === 0) {
         feed.innerHTML = '<p class="comments-empty">No comments yet — be the first to share.</p>';
         return;
