@@ -34,24 +34,29 @@
     ];
 
     // Live updates
+    let latestCounts = [0,0,0,0];
+    let latestTotal = 0;
+
     onValue(pollRef, (snapshot) => {
       const data = snapshot.val() || {};
-      const counts = LABELS.map(k => data[k] || 0);
-      const total = counts.reduce((a, b) => a + b, 0);
+      latestCounts = LABELS.map(k => data[k] || 0);
+      latestTotal = latestCounts.reduce((a, b) => a + b, 0);
+      if (window._hasVoted) renderResults();
+    });
 
+    function renderResults() {
       LABELS.forEach((_, i) => {
-        const pct = total > 0 ? Math.round(counts[i] / total * 100) : 0;
+        const pct = latestTotal > 0 ? Math.round(latestCounts[i] / latestTotal * 100) : 0;
         const pctEl = document.getElementById(`pct${i}`);
         const barEl = document.getElementById(`barFill${i}`);
         const countEl = document.getElementById(`count${i}`);
         if (pctEl) pctEl.textContent = pct + '%';
         if (barEl) barEl.style.width = pct + '%';
-        if (countEl) countEl.textContent = counts[i] + (counts[i] === 1 ? ' vote' : ' votes');
+        if (countEl) countEl.textContent = latestCounts[i] + (latestCounts[i] === 1 ? ' vote' : ' votes');
       });
-
       const totalEl = document.getElementById('totalVotes');
-      if (totalEl) totalEl.textContent = total + (total === 1 ? ' person has' : ' people have') + ' weighed in';
-    });
+      if (totalEl) totalEl.textContent = latestTotal + (latestTotal === 1 ? ' person has' : ' people have') + ' weighed in';
+    }
 
     // Exposed globally for onclick handlers
     window.castVote = function(idx) {
@@ -66,6 +71,7 @@
         document.getElementById(`bar${i}`).style.display = 'block';
       });
 
+      renderResults();
     };
     // Comments
     const commentsRef = ref(db, 'comments');
